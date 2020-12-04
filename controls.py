@@ -24,6 +24,7 @@ client.takeoffAsync().join()
 
 speed = 5
 
+
 def calculate_increment(caller, prev_dir, prev_cnt):
     # update momentum variables
     if caller != prev_dir:
@@ -34,6 +35,19 @@ def calculate_increment(caller, prev_dir, prev_cnt):
     
     # calculate position increment based on momemtum
     return speed * 1.5 ** prev_cnt, prev_dir, prev_cnt
+
+
+def print_command(prev_dir, increment):
+    switcher = {
+        0: "Right",
+        1: "Left",
+        2: "Backward",
+        3: "Forward",
+        4: "Up",
+        5: "Down"
+    }
+
+    print(switcher.get(prev_dir, "Invalid"), " ", increment)
 
 
 def main():
@@ -61,37 +75,31 @@ def main():
         # look right to move right
         if (x > rightbound and (upbound <= y <= downbound)):
             increment, prev_dir, prev_cnt = calculate_increment(0, prev_dir, prev_cnt)
-            print("RIGHT ", increment)
             y_start = y_start + increment
         
         # look left to move left
         elif (x < leftbound and (upbound <= y <= downbound)):
             increment, prev_dir, prev_cnt = calculate_increment(1, prev_dir, prev_cnt)
-            print("LEFT ", increment)
             y_start = y_start - increment
 
         # look down to move backwards
         elif (y > downbound and (leftbound <= x <= rightbound)):
             increment, prev_dir, prev_cnt = calculate_increment(2, prev_dir, prev_cnt)
-            print("BACKWARD ", increment)
             x_start = x_start - increment
             
         # look up to move forwards
         elif (y < upbound and (leftbound <= x <= rightbound)):
             increment, prev_dir, prev_cnt = calculate_increment(3, prev_dir, prev_cnt)
-            print("FORWARD ", increment)
             x_start = x_start + increment
         
         # look top-right to move up
         elif (y < upbound and x > rightbound):
             increment, prev_dir, prev_cnt = calculate_increment(4, prev_dir, prev_cnt)
-            print("UP ", increment)
             z_start = z_start - increment
 
         # look bottom-left to move down
         elif (y > downbound and x < leftbound):
             increment, prev_dir, prev_cnt = calculate_increment(5, prev_dir, prev_cnt)
-            print("DOWN ", increment)
             z_start = z_start + increment
         
         # not a valid command, don't try to move drone
@@ -99,5 +107,6 @@ def main():
             continue
 
         client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()
+        print_command(prev_dir, increment)
 
 main()

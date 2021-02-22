@@ -1,3 +1,13 @@
+
+
+# Can play around with these values to change the size and location of circles for UI, the hitboxes in the logic also use these variables
+RADIUS = 100
+BUTTON_OFFSET = 200
+# Can play around with these variables to figure out hold long you have to be within a circle to trigger an action (more-or-less, THRESHOLD * INTERVAL)
+FIXATION_THRESHOLD = 5
+POLLING_INTERVAL = 0.3
+
+
 ################# OVERLAY #######################
 
 import sys
@@ -23,21 +33,22 @@ class CustomWindow(QMainWindow):
             painter.setBrush(QBrush(Qt.red, Qt.SolidPattern))
 
             centerPoint = QDesktopWidget().availableGeometry(0).center()
-            painter.drawEllipse(centerPoint, 40, 40)
-            painter.drawEllipse(centerPoint - QPoint(200, 0), 40, 40)
-            painter.drawEllipse(centerPoint + QPoint(200, 0), 40, 40)
-            painter.drawEllipse(centerPoint - QPoint(0, 200), 40, 40)
-            painter.drawEllipse(centerPoint + QPoint(0, 200), 40, 40)
+            print(centerPoint.x(), centerPoint.y())
+            painter.drawEllipse(centerPoint, RADIUS, RADIUS)
+            painter.drawEllipse(centerPoint - QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
+            painter.drawEllipse(centerPoint + QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
+            painter.drawEllipse(centerPoint - QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
+            painter.drawEllipse(centerPoint + QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
         
             if showDescriptions:
                 centerPoint = QDesktopWidget().availableGeometry(0).center()
 
                 painter.setOpacity(1)
                 painter.drawText(centerPoint.x() - 20, centerPoint.y(), "Forward")
-                painter.drawText(centerPoint.x() - 200 - 15, centerPoint.y(), "R.Left")
-                painter.drawText(centerPoint.x() + 200 - 15, centerPoint.y(), "R.Right")
-                painter.drawText(centerPoint.x() - 5, centerPoint.y() - 200, "Up")
-                painter.drawText(centerPoint.x() - 10, centerPoint.y() + 200, "Down")
+                painter.drawText(centerPoint.x() - BUTTON_OFFSET - 15, centerPoint.y(), "R.Left")
+                painter.drawText(centerPoint.x() + BUTTON_OFFSET - 15, centerPoint.y(), "R.Right")
+                painter.drawText(centerPoint.x() - 5, centerPoint.y() - BUTTON_OFFSET, "Up")
+                painter.drawText(centerPoint.x() - 10, centerPoint.y() + BUTTON_OFFSET, "Down")
 
 
 def toggleButtonClicked():
@@ -105,13 +116,12 @@ import math
 import enum
 import time
 
-RADIUS = 50
-BUTTON_OFFSET = 200
-
 # parameters used to detemine the threshold when mapping to cardinal directions
 width = win32api.GetSystemMetrics(0)
-height = win32api.GetSystemMetrics(1)
+height = win32api.GetSystemMetrics(1) * 0.963 # GUI size doesn't cover the whole screen due to taskbar (I think)
 
+
+print(width, height)
 # connect to the AirSim simulator
 client = airsim.MultirotorClient()
 client.confirmConnection()
@@ -169,6 +179,7 @@ def main():
     # to help with detecting gaze fixation
     prev_circle = 0
     curr_circle = 0
+    same_circle_count = 0
 
     while(1):
         # if key is pressed stop giving inputs until key C is pressed
@@ -201,47 +212,56 @@ def main():
         else:
             curr_circle = Button.Other
 
-        # LEFT
-        if prev_circle == Button.Left and curr_circle == Button.Left:
-            _, prev_dir, prev_cnt = calculate_increment(1, prev_dir, prev_cnt)
-            client.rotateByYawRateAsync(-increment, 1).join()
-            renormalize(x_start, y_start) # normalize x and y position after doing a rotation, otherwise it drifts
-        # RIGHT
-        elif prev_circle == Button.Right and  curr_circle == Button.Right:
-            _, prev_dir, prev_cnt = calculate_increment(2, prev_dir, prev_cnt)
-            client.rotateByYawRateAsync(increment, 1).join()
-            renormalize(x_start, y_start)
-        # DOWN
-        elif prev_circle == Button.Down and curr_circle == Button.Down:
-            increment, prev_dir, prev_cnt = calculate_increment(3, prev_dir, prev_cnt)
-            z_start = z_start + increment
-            client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()
-        # UP
-        elif prev_circle == Button.Up and curr_circle == Button.Up:
-            increment, prev_dir, prev_cnt = calculate_increment(4, prev_dir, prev_cnt)
-            z_start = z_start - increment
-            client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()
-        # CENTER
-        elif prev_circle == Button.Center and curr_circle == Button.Center:            
-            increment, prev_dir, prev_cnt = calculate_increment(5, prev_dir, prev_cnt)
-            orientation = client.getMultirotorState().kinematics_estimated.orientation
-
-            theta = math.acos(orientation.z_val) * 2
-            x_start -= math.cos(theta) * increment
-            if (orientation.w_val > 0):
-                y_start += math.sin(theta) * increment
-            else:
-                y_start -= math.sin(theta) * increment
-
-            client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()           
+        # Update counter tracking fixation
+        if prev_circle == curr_circle:
+            same_circle_count += 1
+        else:
+            same_circle_count = 0
         
+        # If same circle was polled enough times in a row
+        if same_circle_count >= FIXATION_THRESHOLD:
+            # LEFT
+            if prev_circle == Button.Left and curr_circle == Button.Left:
+                _, prev_dir, prev_cnt = calculate_increment(1, prev_dir, prev_cnt)
+                client.rotateByYawRateAsync(-increment, 1).join()
+                renormalize(x_start, y_start) # normalize x and y position after doing a rotation, otherwise it drifts
+            # RIGHT
+            elif prev_circle == Button.Right and  curr_circle == Button.Right:
+                _, prev_dir, prev_cnt = calculate_increment(2, prev_dir, prev_cnt)
+                client.rotateByYawRateAsync(increment, 1).join()
+                renormalize(x_start, y_start)
+            # DOWN
+            elif prev_circle == Button.Down and curr_circle == Button.Down:
+                increment, prev_dir, prev_cnt = calculate_increment(3, prev_dir, prev_cnt)
+                z_start = z_start + increment
+                client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()
+            # UP
+            elif prev_circle == Button.Up and curr_circle == Button.Up:
+                increment, prev_dir, prev_cnt = calculate_increment(4, prev_dir, prev_cnt)
+                z_start = z_start - increment
+                client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()
+            # CENTER
+            elif prev_circle == Button.Center and curr_circle == Button.Center:            
+                increment, prev_dir, prev_cnt = calculate_increment(5, prev_dir, prev_cnt)
+                orientation = client.getMultirotorState().kinematics_estimated.orientation
+
+                theta = math.acos(orientation.z_val) * 2
+                x_start -= math.cos(theta) * increment
+                if (orientation.w_val > 0):
+                    y_start += math.sin(theta) * increment
+                else:
+                    y_start -= math.sin(theta) * increment
+
+                client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()           
+            
         else: 
             prev_circle = curr_circle
-            time.sleep(1)
+            time.sleep(POLLING_INTERVAL)
             continue
         
         # If instruction happened, reset buffer and print instruction
         prev_circle = Button.Other
+        same_circle_count = 0
         print_command(prev_dir, increment)
 
 

@@ -1,12 +1,22 @@
 
 
+################# CONSTANTS #######################
+
 # Can play around with these values to change the size and location of circles for UI, the hitboxes in the logic also use these variables
 RADIUS = 100
 BUTTON_OFFSET = 200
-# Can play around with these variables to figure out hold long you have to be within a circle to trigger an action (more-or-less, THRESHOLD * INTERVAL)
-FIXATION_THRESHOLD = 5
-POLLING_INTERVAL = 0.3
 
+# Can play around with these variables to figure out hold long you have to be within a circle to trigger an action (more-or-less, THRESHOLD * INTERVAL)
+FIXATION_THRESHOLD = 10
+POLLING_INTERVAL = 0.1
+
+################## GLOBALS ######################
+
+# used to change color of UI buttons when the drone is executing an instruction
+instruction_executing = 0
+
+# used both in logic to detect gaze and in UI to highlight the circle on which the gaze currently lands (if any)
+curr_circle = 0
 
 ################# OVERLAY #######################
 
@@ -30,16 +40,36 @@ class CustomWindow(QMainWindow):
         if showGuides:
             painter.setOpacity(0.4)
             painter.setPen(QPen(Qt.black, 5, Qt.SolidLine))
-            painter.setBrush(QBrush(Qt.red, Qt.SolidPattern))
 
+            # buttons are different colors depending on if an instruction is executing or not
+            if instruction_executing:
+                painter.setBrush(QBrush(Qt.gray, Qt.SolidPattern))
+            else:
+                painter.setBrush(QBrush(Qt.red, Qt.SolidPattern))
+            
             centerPoint = QDesktopWidget().availableGeometry(0).center()
-            print(centerPoint.x(), centerPoint.y())
             painter.drawEllipse(centerPoint, RADIUS, RADIUS)
             painter.drawEllipse(centerPoint - QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
             painter.drawEllipse(centerPoint + QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
             painter.drawEllipse(centerPoint - QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
             painter.drawEllipse(centerPoint + QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
-        
+
+
+            # if the current gaze lands on a button, highlight that button
+            painter.setBrush(QBrush(Qt.green, Qt.SolidPattern))
+
+            if curr_circle == Button.Center:
+                painter.drawEllipse(centerPoint, RADIUS, RADIUS)
+            elif curr_circle == Button.Left:
+                painter.drawEllipse(centerPoint - QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
+            elif curr_circle == Button.Right:
+                painter.drawEllipse(centerPoint + QPoint(BUTTON_OFFSET, 0), RADIUS, RADIUS)
+            elif curr_circle == Button.Up:
+                painter.drawEllipse(centerPoint - QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
+            elif curr_circle == Button.Down: 
+                painter.drawEllipse(centerPoint + QPoint(0, BUTTON_OFFSET), RADIUS, RADIUS)
+
+            # write text in the middle of each button (TODO: make text larger)
             if showDescriptions:
                 centerPoint = QDesktopWidget().availableGeometry(0).center()
 
@@ -55,11 +85,13 @@ def toggleButtonClicked():
     global showGuides
     showGuides = not showGuides 
     toggleButton.setText("Show Guide Points" if not showGuides else "Hide Guide Points")
+    window.update()
 
 def descriptionButtonClicked():
     global showDescriptions
     showDescriptions = not showDescriptions 
     descriptionButton.setText("Show Descriptions" if not showDescriptions else "Hide Descriptions")
+    window.update()
 
 def start(apps):
     apps.exec_()
@@ -120,8 +152,6 @@ import time
 width = win32api.GetSystemMetrics(0)
 height = win32api.GetSystemMetrics(1) * 0.963 # GUI size doesn't cover the whole screen due to taskbar (I think)
 
-
-print(width, height)
 # connect to the AirSim simulator
 client = airsim.MultirotorClient()
 client.confirmConnection()
@@ -133,6 +163,7 @@ client.takeoffAsync().join()
 base_speed = 8
 rotate = 22.5
 
+
 def calculate_increment(caller, prev_dir, prev_cnt):
     # update momentum variables
     if caller != prev_dir:
@@ -141,6 +172,11 @@ def calculate_increment(caller, prev_dir, prev_cnt):
     elif caller >= 2:
         prev_cnt += 1
     
+    # update UI
+    global instruction_executing
+    instruction_executing = 1
+    window.update()
+
     # calculate position increment based on momemtum
     return base_speed * 1.5 ** prev_cnt, prev_dir, prev_cnt
 
@@ -149,6 +185,7 @@ def renormalize(x_start, y_start):
     position = client.getMultirotorState().kinematics_estimated.position
     z_start = position.z_val
     client.moveToPositionAsync(x_start, y_start, z_start, base_speed, 5).join()
+
 
 def print_command(prev_dir, increment):
     switcher = {
@@ -161,6 +198,7 @@ def print_command(prev_dir, increment):
 
     print(switcher.get(prev_dir, "Invalid"), " ", increment)
 
+
 class Button(enum.Enum):
     Other = 0
     Left = 1
@@ -168,6 +206,7 @@ class Button(enum.Enum):
     Down = 3
     Up = 4
     Center = 5
+
 
 def main():
     print("Setup Complete")
@@ -178,7 +217,6 @@ def main():
 
     # to help with detecting gaze fixation
     prev_circle = 0
-    curr_circle = 0
     same_circle_count = 0
 
     while(1):
@@ -198,6 +236,8 @@ def main():
         x = gaze_pos[0]
         y = gaze_pos[1]
 
+        global curr_circle
+    
         # Find position of current point
         if math.sqrt((y - height / 2) ** 2 + (x - (width / 2 - BUTTON_OFFSET)) ** 2) < RADIUS:
             curr_circle = Button.Left
@@ -211,6 +251,9 @@ def main():
             curr_circle = Button.Center
         else:
             curr_circle = Button.Other
+
+        # Update UI with current selection
+        window.update()
 
         # Update counter tracking fixation
         if prev_circle == curr_circle:
@@ -253,12 +296,17 @@ def main():
                     y_start -= math.sin(theta) * increment
 
                 client.moveToPositionAsync(x_start, y_start, z_start, increment, 5).join()           
-            
+        
         else: 
             prev_circle = curr_circle
             time.sleep(POLLING_INTERVAL)
             continue
         
+        # update UI
+        global instruction_executing
+        instruction_executing = 0
+        window.update()
+
         # If instruction happened, reset buffer and print instruction
         prev_circle = Button.Other
         same_circle_count = 0
@@ -268,4 +316,4 @@ def main():
 # Run the application
 threading.Thread(target=main).start() # Control scheme starts in other thread
 window.showFullScreen()
-sys.exit(app.exec_()) # QGui must run in the main thread
+sys.exit(app.exec_()) # QGui must run in the main thread (TODO: fix program crashing when exit button is pressed)

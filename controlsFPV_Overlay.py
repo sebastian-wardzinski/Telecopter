@@ -44,20 +44,19 @@ class CustomWindow(QMainWindow):
 
     def paintEvent(self, event=None):
         painter = QPainter(self)
-        
+        self.setCursor(Qt.BlankCursor)
         if showGuides:
             painter.setPen(QPen(Qt.black, 0, Qt.SolidLine))
             centerPoint = QDesktopWidget().availableGeometry(0).center()
             
-            # To draw over the cursor, sucks for a few reasons
             """
+            To draw over the cursor, a few issues 
             - doesn't move when the drone is performing action
             - can't click on things (you end up clicking on the circle rather than whats behind it)
-            - the mouse cursor is still visible
+            """
             painter.setOpacity(0.8)
             painter.setBrush(QBrush(Qt.gray, Qt.SolidPattern))
             painter.drawEllipse(QPoint(x,y), RADIUS / 3, RADIUS / 3)
-            """
 
             painter.setOpacity(0.4)
             painter.setBrush(QBrush(Qt.green, Qt.SolidPattern))

@@ -1,0 +1,12 @@
+{
+  "SeeDocsAt": "https://github.com/Microsoft/AirSim/blob/master/docs/settings.md",
+  "SettingsVersion": 1.2,
+  "SimMode": "Multirotor",
+  "CameraDefaults": {
+    "Gimbal": {
+      "Stabilization": 0.33,
+      "Pitch": 0,
+      "Roll": 0
+    }
+  }
+}

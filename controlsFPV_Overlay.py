@@ -21,11 +21,11 @@ y = 0
 
 from enum import Enum
 class Mode(Enum):
-    LONG_DISTANCE = 0
-    NORMAL = 1
-    SHORT_DISTANCE = 2
+    SLOW = 0
+    MEDIUM = 1
+    FAST = 2
 
-mode = Mode.LONG_DISTANCE
+mode = Mode.MEDIUM
 
 ################# OVERLAY #######################
 import sys
@@ -37,6 +37,13 @@ from PyQt5.QtWidgets import *
 
 showGuides = True
 showDescriptions = True
+
+selectedSpeed = "1"
+speedChoice = {"0": 'Slow', "1": 'Medium', "2": 'Fast'}
+colorBlindMode = False
+
+def getColor():
+    return Qt.red if not colorBlindMode else Qt.blue
 
 class CustomWindow(QMainWindow):
     def __init__(self):
@@ -76,7 +83,7 @@ class CustomWindow(QMainWindow):
             if instruction_executing:
                 painter.setBrush(QBrush(Qt.gray, Qt.SolidPattern))
             else:
-                painter.setBrush(QBrush(Qt.blue, Qt.SolidPattern))
+                painter.setBrush(QBrush(getColor(), Qt.SolidPattern))
 
             if curr_circle != Button.Center: 
                 painter.drawRoundedRect(centerPoint.x() - RADIUS, centerPoint.y() - RADIUS, RADIUS * 2, RADIUS * 2, 15, 15)
@@ -112,6 +119,18 @@ def toggleButtonClicked():
     toggleButton.setText("Show Guide Points" if not showGuides else "Hide Guide Points")
     window.update()
 
+def colorBlindButtonClicked():
+    global colorBlindMode
+    colorBlindMode = not colorBlindMode
+    colorButton.setText(
+        "Enable Color Blind Mode" if not colorBlindMode else "Disable Color Blind Mode")
+    window.update()
+
+def sliderValueChanged(value):
+    global selectedSpeed
+    selectedSpeed = str(value)
+    sliderLabel.setText(f"Speed: {speedChoice[str(value)]}")
+
 def descriptionButtonClicked():
     global showDescriptions
     showDescriptions = not showDescriptions 
@@ -131,7 +150,7 @@ window.setAttribute(Qt.WA_TranslucentBackground, True)
 
 # Create the toggle button
 toggleButton = QPushButton(window)
-toggleButton.setGeometry(QRect(240, 190, 120, 31))
+toggleButton.setGeometry(QRect(240, 190, 180, 31))
 toggleButton.setText("Hide Guide Points")
 toggleButton.clicked.connect(toggleButtonClicked)
 
@@ -147,13 +166,13 @@ descriptionButton.setText("Hide Descriptions")
 descriptionButton.clicked.connect(descriptionButtonClicked)
 
 describeQr = descriptionButton.frameGeometry() # in the top right
-describeCp = QDesktopWidget().availableGeometry(0).topRight() + QPoint(0, 50)
+describeCp = QDesktopWidget().availableGeometry(0).topRight() + QPoint(0, 200)
 describeQr.moveTopRight(describeCp)
 descriptionButton.move(describeQr.topLeft())
 
 # Create the Quit button 
 quitButton = QPushButton(window)
-quitButton.setGeometry(QRect(240, 190, 120, 31))
+quitButton.setGeometry(QRect(240, 190, 180, 31))
 quitButton.setText("Quit")
 quitButton.clicked.connect(app.quit)
 
@@ -162,6 +181,36 @@ quitCp = QDesktopWidget().availableGeometry(0).topLeft()
 quitQr.moveTopLeft(quitCp)
 quitButton.move(quitQr.topLeft())
 
+# Create the color button
+colorButton = QPushButton(window)
+colorButton.setGeometry(QRect(240, 190, 180, 31))
+colorButton.setText("Enable Color Blind Mode")
+colorButton.clicked.connect(colorBlindButtonClicked)
+
+# Top Right button
+qr = colorButton.frameGeometry()
+cp = QDesktopWidget().availableGeometry(0).topRight()
+qr.moveTopRight(cp)
+colorButton.move(qr.left(), 31 + 50 + 50 + 31)
+
+# Create slider
+slider = QSlider(Qt.Horizontal, window)
+slider.setMinimum(0)
+slider.setMaximum(2)
+slider.setValue(int(selectedSpeed))
+slider.setTickInterval(1)
+slider.setTickPosition(QSlider.TicksBelow)
+slider.setGeometry(QRect(0, 0, 180, 90))
+sliderLabel = QLabel(f"Speed: {speedChoice['1']}", slider)
+sliderLabel.setAlignment(Qt.AlignCenter)
+sliderFrame = slider.frameGeometry()
+sliderPos = QDesktopWidget().availableGeometry(0).topRight()
+sliderFrame.moveBottomRight(sliderPos)
+# change the 2nd param to change how far from the top button it is
+slider.move(sliderFrame.left(), 50)
+slider.setStyleSheet(
+    "background-color:#cfcfcf; font-size: 18px; text-align: center;")
+slider.valueChanged.connect(sliderValueChanged)
 
 ################# Control Scheme #######################
 
@@ -199,15 +248,15 @@ def calculate_increment(caller, prev_dir, prev_cnt):
     window.update()
 
     base_speed = rotate = 0
-    if mode == Mode.NORMAL:
+    if selectedSpeed == "1":
         base_speed = 8
-        rotate = 22.5
-    elif mode == Mode.SHORT_DISTANCE:
-        base_speed = 4
-        rotate = 30
-    elif mode == Mode.LONG_DISTANCE:
-        base_speed = 16
-        rotate = 18
+        rotate = 24
+    elif selectedSpeed == "0":
+        base_speed = 6
+        rotate = 28
+    elif selectedSpeed == "2":
+        base_speed = 12
+        rotate = 20
 
     returnValue = 0
     if caller == 1 or caller == 2:
